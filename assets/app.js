@@ -48,7 +48,12 @@ var UI = {
     aboutTitle: 'Hi, I’m James.',
     aboutBody: 'I graduated from National Taiwan University with a degree in Foreign Languages and Literature, a humanities student through and through, and I’m now pursuing a master’s in Information Management. Here I share the cybersecurity courses I’ve taken, all completely free. Feel free to use them, and I’d love to hear your suggestions!',
     home: 'Home', chapters: 'Chapters', chapter: 'Chapter', prev: '← Previous', next: 'Next →',
-    courseIntro: '7 short chapters to review the core of an introductory cryptography course.'
+    courseIntro: '7 short chapters to review the core of an introductory cryptography course.',
+    notesTitle: 'My notes', export: 'Export all notes', notesHint: 'Notes are saved in this browser only. Export them to keep a copy.',
+    markLabel: 'Mark this moment', markPh: 'What happens here? (optional)', addMark: 'Add mark',
+    noMarks: 'No marks yet. Pause the video and add one.', noteLabel: 'Chapter notes',
+    notePh: 'Write your notes for this chapter...', saved: 'Saved', del: 'Delete mark',
+    marksCount: '{n} marks', untitled: '(no note)', jump: 'Jump to'
   },
   zh: {
     navCourses: '課程', navHow: '怎麼運作', navAbout: '關於我',
@@ -67,7 +72,12 @@ var UI = {
     aboutTitle: '嗨，我是詹姆士。',
     aboutBody: '我是台大外文系畢業的文組生，目前就讀資管所。這裡會分享我在資安領域修過的課程，全部免費，歡迎大家使用，也很歡迎給我建議！',
     home: '首頁', chapters: '章節', chapter: '第 {n} 章', prev: '← 上一章', next: '下一章 →',
-    courseIntro: '7 支短片，複習密碼學入門課程的核心內容。'
+    courseIntro: '7 支短片，複習密碼學入門課程的核心內容。',
+    notesTitle: '我的筆記', export: '匯出全部筆記', notesHint: '筆記只會存在這個瀏覽器裡，記得匯出備份。',
+    markLabel: '標記這個時間點', markPh: '這裡在講什麼？（可不填）', addMark: '加入標記',
+    noMarks: '還沒有標記。暫停影片後就能加一個。', noteLabel: '本章筆記',
+    notePh: '寫下這一章的筆記…', saved: '已儲存', del: '刪除標記',
+    marksCount: '{n} 個標記', untitled: '（沒有備註）', jump: '跳到'
   }
 };
 
@@ -86,6 +96,10 @@ function applyLang() {
   document.querySelectorAll('[data-i18n]').forEach(function (el) {
     var v = t[el.getAttribute('data-i18n')];
     if (v !== undefined) el.textContent = v;
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(function (el) {
+    var v = t[el.getAttribute('data-i18n-ph')];
+    if (v !== undefined) el.placeholder = v;
   });
   document.querySelectorAll('.lang button').forEach(function (b) {
     b.setAttribute('aria-pressed', b.getAttribute('data-lang') === lang ? 'true' : 'false');
@@ -117,6 +131,21 @@ function peek(v) {
 document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('video[data-peek]').forEach(peek);
 });
+
+function fmt(s) {
+  s = Math.max(0, Math.floor(s || 0));
+  return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
+}
+function loadNotes(file) {
+  try {
+    var d = JSON.parse(localStorage.getItem('sb-notes:' + file) || 'null');
+    if (d && Array.isArray(d.marks)) return { text: d.text || '', marks: d.marks };
+  } catch (e) {}
+  return { text: '', marks: [] };
+}
+function saveNotes(file, d) {
+  try { localStorage.setItem('sb-notes:' + file, JSON.stringify(d)); } catch (e) {}
+}
 
 function totalMinutes(c) {
   var s = 0; c.chapters.forEach(function (ch) { var p = ch.dur.split(':'); s += +p[0] * 60 + +p[1]; });
@@ -173,8 +202,91 @@ function initCourse() {
     if (play) { video.removeAttribute('data-peek'); video.play().catch(function () {}); }
     else peek(video);
     history.replaceState(null, '', '?ch=' + (i + 1));
+    noteText.value = loadNotes(ch.file).text;
+    savedMsg.textContent = '';
     render();
+    renderMarks();
   }
+
+  /* ---- Notes & marks (stored per chapter in localStorage) ---- */
+  var noteText = document.getElementById('note-text');
+  var savedMsg = document.getElementById('saved');
+  var marksList = document.getElementById('marks');
+  var markTime = document.getElementById('mark-time');
+  var markNote = document.getElementById('mark-note');
+  var saveTimer = null;
+
+  function currentFile() { return c.chapters[idx].file; }
+
+  function renderMarks() {
+    var t = UI[lang];
+    var data = loadNotes(currentFile());
+    marksList.innerHTML = '';
+    document.getElementById('marks-empty').hidden = data.marks.length > 0;
+    data.marks.forEach(function (m, i) {
+      var li = document.createElement('li');
+      var jump = document.createElement('button');
+      jump.type = 'button'; jump.className = 'mark-jump';
+      jump.innerHTML = '<span class="time-pill"></span><span class="mark-text"></span>';
+      jump.querySelector('.time-pill').textContent = fmt(m.t);
+      jump.querySelector('.mark-text').textContent = m.note || t.untitled;
+      jump.setAttribute('aria-label', t.jump + ' ' + fmt(m.t) + ' ' + (m.note || ''));
+      jump.addEventListener('click', function () {
+        video.removeAttribute('data-peek');
+        video.currentTime = m.t; video.play().catch(function () {});
+      });
+      var del = document.createElement('button');
+      del.type = 'button'; del.className = 'mark-del';
+      del.setAttribute('aria-label', t.del + ' ' + fmt(m.t));
+      del.innerHTML = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+      del.addEventListener('click', function () {
+        var d = loadNotes(currentFile()); d.marks.splice(i, 1); saveNotes(currentFile(), d);
+        renderMarks(); render();
+      });
+      li.appendChild(jump); li.appendChild(del); marksList.appendChild(li);
+    });
+  }
+
+  video.addEventListener('timeupdate', function () {
+    markTime.textContent = fmt(video.getAttribute('data-peek') === '1' ? 0 : video.currentTime);
+  });
+
+  document.getElementById('mark-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var tNow = video.getAttribute('data-peek') === '1' ? 0 : video.currentTime;
+    var d = loadNotes(currentFile());
+    d.marks.push({ t: Math.round(tNow * 10) / 10, note: markNote.value.trim() });
+    d.marks.sort(function (a, b) { return a.t - b.t; });
+    saveNotes(currentFile(), d);
+    markNote.value = '';
+    renderMarks(); render();
+  });
+
+  noteText.addEventListener('input', function () {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      var d = loadNotes(currentFile()); d.text = noteText.value; saveNotes(currentFile(), d);
+      savedMsg.textContent = UI[lang].saved + ' ✓';
+    }, 400);
+  });
+
+  document.getElementById('export').addEventListener('click', function () {
+    var md = '# ' + c.title[lang] + ' · Syllabuzz 學蜂\n\n';
+    c.chapters.forEach(function (ch, i) {
+      var d = loadNotes(ch.file);
+      if (!d.text && !d.marks.length) return;
+      md += '## ' + chLabel(i) + ' · ' + ch.title[lang] + '\n\n';
+      d.marks.forEach(function (m) { md += '- [' + fmt(m.t) + '] ' + (m.note || UI[lang].untitled) + '\n'; });
+      if (d.marks.length) md += '\n';
+      if (d.text) md += d.text + '\n\n';
+    });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
+    a.download = key + '-notes.md';
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+
+  listeners.push(renderMarks);
 
   function render() {
     var t = UI[lang], ch = c.chapters[idx];
@@ -194,7 +306,8 @@ function initCourse() {
       b.setAttribute('aria-current', i === idx ? 'true' : 'false');
       b.innerHTML = '<span class="mini" aria-hidden="true">CH ' + (i + 1) + '</span><span class="t"><b></b><span></span></span>';
       b.querySelector('b').textContent = chp.title[lang];
-      b.querySelector('.t span').textContent = chLabel(i) + ' · ' + chp.dur;
+      var n = loadNotes(chp.file).marks.length;
+      b.querySelector('.t span').textContent = chLabel(i) + ' · ' + chp.dur + (n ? ' · ' + t.marksCount.replace('{n}', n) : '');
       b.addEventListener('click', function () { load(i, true); window.scrollTo({ top: 0, behavior: 'smooth' }); });
       li.appendChild(b); list.appendChild(li);
     });
