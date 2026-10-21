@@ -46,6 +46,29 @@
         <button type="button" id="prev" data-i18n="prev">← Previous</button>
         <button type="button" id="next" data-i18n="next">Next →</button>
       </div>
+
+      <section class="notes" aria-labelledby="notes-title">
+        <div class="notes-head">
+          <h3 id="notes-title" data-i18n="notesTitle">My notes</h3>
+          <button type="button" id="export" class="link-btn" data-i18n="export">Export all notes</button>
+        </div>
+        <p class="hint" data-i18n="notesHint">Notes are saved in this browser only.</p>
+
+        <form id="mark-form" class="mark-form">
+          <label for="mark-note" data-i18n="markLabel">Mark this moment</label>
+          <div class="mark-row">
+            <span class="time-pill" id="mark-time">0:00</span>
+            <input id="mark-note" type="text" autocomplete="off" data-i18n-ph="markPh" placeholder="What happens here? (optional)">
+            <button type="submit" class="btn-mark" data-i18n="addMark">Add mark</button>
+          </div>
+        </form>
+        <ol id="marks" class="marks"></ol>
+        <p id="marks-empty" class="hint" data-i18n="noMarks">No marks yet.</p>
+
+        <label for="note-text" class="note-label" data-i18n="noteLabel">Chapter notes</label>
+        <textarea id="note-text" rows="6" data-i18n-ph="notePh" placeholder="Write your notes for this chapter..."></textarea>
+        <p id="saved" class="hint" aria-live="polite"></p>
+      </section>
     </div>
     <aside class="playlist" aria-label="Chapters">
       <h3 data-i18n="chapters">Chapters</h3>
